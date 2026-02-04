@@ -140,6 +140,16 @@ with st.sidebar:
     api_hash_input = st.text_input("API_HASH", placeholder="abcdef...", type="password", help="Строка с my.telegram.org")
     api_ok = api_id_input.strip() and api_hash_input.strip()
 
+    with st.expander("ℹ️ Как получить API Keys?", expanded=False):
+        st.markdown("""
+        **Шаг 1.** Зайдите на [my.telegram.org](https://my.telegram.org), войдите по номеру телефона.  
+        **Шаг 2.** Нажмите **«API development tools»**.  
+        **Шаг 3.** Заполните форму (App title: `Scraper`, Short name: `scraper`).  
+        **Шаг 4.** Скопируйте **api_id** и **api_hash** в поля выше.  
+        **Шаг 5.** Вкладка «По номеру телефона»: введите номер → «Отправить код» → введите код из Telegram → «Войти».  
+        ⚠️ **Ключи никому не передавайте.**
+        """)
+
     st.markdown("---")
     st.markdown("<span style='font-weight: 600;'>📱 Вход в Telegram</span>", unsafe_allow_html=True)
     session_input_sidebar = ""
@@ -297,16 +307,6 @@ with tab_config:
     st.session_state.last_export_format = export_format
 
     start_button = st.button("🚀 Start Scraping", type="primary", use_container_width=True)
-
-    with st.expander("ℹ️ Как получить API Keys?", expanded=False):
-        st.markdown("""
-        **Шаг 1.** Зайдите на [my.telegram.org](https://my.telegram.org), войдите по номеру телефона.  
-        **Шаг 2.** Нажмите **«API development tools»**.  
-        **Шаг 3.** Заполните форму (App title: `Scraper`, Short name: `scraper`).  
-        **Шаг 4.** Скопируйте **api_id** и **api_hash** в поля слева.  
-        **Шаг 5.** Вкладка «По номеру телефона»: введите номер → «Отправить код» → введите код из Telegram → «Войти».  
-        ⚠️ **Ключи никому не передавайте.**
-        """)
 
     st.markdown("<div class='card'><h3>📋 Ссылки на каналы</h3></div>", unsafe_allow_html=True)
     channel_links_text = st.text_area(
