@@ -1,0 +1,15 @@
+# Секреты и сессии (не коммитить!)
+.env
+.env.*
+*.session
+*.session-journal
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Ignore cursor AI rules
+.cursor/rules/codacy.mdc

@@ -1,0 +1,8 @@
+# Blueprint для деплоя на Render.com из GitHub
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: telegram-cloud-scraper
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0

@@ -1,0 +1,10 @@
+# Настройки для работы в облаке (Railway, Render, Heroku и т.д.)
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = true
+
+# Порт и адрес задаются через CLI в Procfile/стартовой команде
+
+[browser]
+gatherUsageStats = false

@@ -4,6 +4,20 @@
 
 ---
 
+## 🌐 Запуск как сайт с GitHub (деплой в облако)
+
+После того как репозиторий залит на GitHub, можно развернуть приложение в виде страницы одним из способов:
+
+| Сервис | Действия |
+|--------|----------|
+| **Railway** | [railway.app](https://railway.app) → New Project → **Deploy from GitHub repo** → выбрать репозиторий. Домен: Settings → Generate Domain. |
+| **Render** | [render.com](https://render.com) → New → **Web Service** → подключить GitHub-репозиторий. Build: `pip install -r requirements.txt`, Start: `streamlit run app.py --server.port=$PORT --server.address=0.0.0.0`. Или использовать **Blueprint** и выбрать репозиторий с `render.yaml`. |
+| **Streamlit Community Cloud** | [share.streamlit.io](https://share.streamlit.io) → **Deploy an app** → указать репозиторий, главный файл: `app.py`. |
+
+Переменные окружения для API-ключей **не нужны** — пользователи вводят их в интерфейсе. В репозитории уже есть `Procfile` (Railway/Heroku), `render.yaml` (Render) и `.streamlit/config.toml` для облака.
+
+---
+
 ## 🚀 Инструкция: Как это запустить (От А до Я)
 
 ### 1️⃣ Получение "Вечного ключа" (Делаем 1 раз локально)
@@ -207,14 +221,18 @@ This app is **multi-user**: each user enters their own **API_ID**, **API_HASH**,
 ## 📁 Project Structure
 
 ```
-railway-scraper/
-├── .env                  # (Don't commit!) Local environment variables
-├── .gitignore            # Excludes .env and *.session files
-├── requirements.txt      # Python dependencies
-├── generate_session.py   # Session string generator
-├── app.py                # Main Streamlit application
-├── Procfile              # Railway deployment command
-└── README.md             # This file
+parserTG/
+├── .env                     # (Don't commit!) Local environment variables
+├── .gitignore               # Excludes .env and *.session files
+├── .streamlit/
+│   └── config.toml          # Streamlit config for cloud (headless, etc.)
+├── requirements.txt         # Python dependencies
+├── runtime.txt              # Python version for Heroku/Railway
+├── generate_session.py      # Session string generator
+├── app.py                   # Main Streamlit application
+├── Procfile                 # Railway/Heroku: start command
+├── render.yaml              # Render.com Blueprint (deploy from GitHub)
+└── README.md                # This file
 ```
 
 ## ⚠️ Security Notes
