@@ -148,6 +148,18 @@ with st.sidebar:
     with login_tab:
         if st.session_state.telegram_session_string:
             st.success("✅ Сессия активна в этой вкладке.")
+            # Сохранить сессию для следующего раза (по второму слайду)
+            with st.expander("💾 Сохранить сессию", expanded=False):
+                st.caption("Скопируйте строку ниже или скачайте файл. Потом вкладка «Вставить сессию» — не нужно вводить код снова.")
+                session_to_save = st.session_state.telegram_session_string
+                st.text_area("Строка сессии (скопируйте)", value=session_to_save, height=80, disabled=True, key="session_display")
+                st.download_button(
+                    label="📥 Скачать сессию в файл",
+                    data=session_to_save,
+                    file_name="telegram_session.txt",
+                    mime="text/plain",
+                    key="dl_session",
+                )
             if st.button("Выйти и войти снова"):
                 st.session_state.telegram_session_string = ""
                 st.session_state.phone_login_pending = None
@@ -238,9 +250,10 @@ with st.sidebar:
                             st.error(f"Ошибка: {e}")
 
     with session_tab:
+        st.caption("Сохранили сессию после входа по телефону? Вставьте сюда — не нужно вводить код снова.")
         session_input_sidebar = st.text_area(
             "TELEGRAM_SESSION (опционально)",
-            placeholder="Вставьте строку сессии",
+            placeholder="Вставьте строку сессии из файла или из блока «Сохранить сессию»",
             height=80,
             help="Или войдите через вкладку «По номеру телефона»",
         )
@@ -272,7 +285,29 @@ st.markdown("---")
 tab_config, tab_results = st.tabs(["📋 Конфигурация", "📊 Результаты и Анализ"])
 
 # ——— Вкладка «Конфигурация» ———
+# По первому слайду: сверху формат выгрузки, кнопка старта и инструкция — визуально понятно
 with tab_config:
+    st.markdown("<div class='card'><h3>Формат выгрузки</h3></div>", unsafe_allow_html=True)
+    export_format = st.radio(
+        "Формат выгрузки:",
+        options=["JSON", "CSV", "Excel"],
+        horizontal=True,
+        key="export_format",
+    )
+    st.session_state.last_export_format = export_format
+
+    start_button = st.button("🚀 Start Scraping", type="primary", use_container_width=True)
+
+    with st.expander("ℹ️ Как получить API Keys?", expanded=False):
+        st.markdown("""
+        **Шаг 1.** Зайдите на [my.telegram.org](https://my.telegram.org), войдите по номеру телефона.  
+        **Шаг 2.** Нажмите **«API development tools»**.  
+        **Шаг 3.** Заполните форму (App title: `Scraper`, Short name: `scraper`).  
+        **Шаг 4.** Скопируйте **api_id** и **api_hash** в поля слева.  
+        **Шаг 5.** Вкладка «По номеру телефона»: введите номер → «Отправить код» → введите код из Telegram → «Войти».  
+        ⚠️ **Ключи никому не передавайте.**
+        """)
+
     st.markdown("<div class='card'><h3>📋 Ссылки на каналы</h3></div>", unsafe_allow_html=True)
     channel_links_text = st.text_area(
         "Введите ссылки (по одной на строку):",
@@ -316,16 +351,6 @@ with tab_config:
     elif scrape_mode == "by_words":
         word_limit_value = st.number_input("Последних слов (примерно):", min_value=1000, max_value=50_000_000, value=100_000, step=10000)
         message_limit = 20_000_000
-
-    export_format = st.radio(
-        "Формат выгрузки:",
-        options=["JSON", "CSV", "Excel"],
-        horizontal=True,
-        key="export_format",
-    )
-    st.session_state.last_export_format = export_format
-
-    start_button = st.button("🚀 Start Scraping", type="primary", use_container_width=True)
 
     # Место под прогресс и лог
     progress_placeholder = st.empty()
@@ -613,17 +638,6 @@ async def run_scraping(api_id, api_hash, session_string, links, options, progres
         if client:
             await client.disconnect()
 
-
-# Инструкция по API-ключам
-with st.expander("ℹ️ Как получить API Keys?", expanded=False):
-    st.markdown("""
-    **Шаг 1.** Зайдите на [my.telegram.org](https://my.telegram.org), войдите по номеру телефона.  
-    **Шаг 2.** Нажмите **«API development tools»**.  
-    **Шаг 3.** Заполните форму (App title: `Scraper`, Short name: `scraper`).  
-    **Шаг 4.** Скопируйте **api_id** и **api_hash** в поля слева.  
-    **Шаг 5.** Вкладка «По номеру телефона»: введите номер → «Отправить код» → введите код из Telegram → «Войти».  
-    ⚠️ **Ключи никому не передавайте.**
-    """)
 
 st.markdown("---")
 st.caption("**Telegram Cloud Scraper Pro** — Streamlit & Telethon")
