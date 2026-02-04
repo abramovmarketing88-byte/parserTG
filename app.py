@@ -126,6 +126,159 @@ def validate_channel_links(text: str) -> tuple[list[str], list[str]]:
     return valid, invalid
 
 
+# ——— Функции скрапинга (должны быть определены до вызова) ———
+def get_media_type(message):
+    if message.photo:
+        return "photo"
+    elif message.video:
+        return "video"
+    elif message.voice:
+        return "voice"
+    elif message.document:
+        return "document"
+    elif message.audio:
+        return "audio"
+    elif message.sticker:
+        return "sticker"
+    elif message.gif:
+        return "gif"
+    elif message.poll:
+        return "poll"
+    return "none"
+
+
+def parse_reactions(message):
+    reactions = []
+    if message.reactions and hasattr(message.reactions, "results") and message.reactions.results:
+        for reaction in message.reactions.results:
+            try:
+                if reaction.reaction:
+                    emoji = getattr(reaction.reaction, "emoticon", None) or str(reaction.reaction)
+                    count = getattr(reaction, "count", 0) or 0
+                    if emoji:
+                        reactions.append({"emoji": emoji, "count": count})
+            except Exception:
+                continue
+    return reactions
+
+
+def build_message_url(channel_username: str, message_id: int) -> str:
+    username = channel_username.lstrip("@")
+    return f"https://t.me/{username}/{message_id}"
+
+
+def normalize_channel_link(link: str) -> str:
+    link = link.strip()
+    if link.startswith("https://t.me/"):
+        link = link[len("https://t.me/"):]
+    elif link.startswith("http://t.me/"):
+        link = link[len("http://t.me/"):]
+    elif link.startswith("t.me/"):
+        link = link[len("t.me/"):]
+    if link.startswith("@"):
+        link = link[1:]
+    return link.strip()
+
+
+async def scrape_channel(client, channel_link, options):
+    try:
+        channel_link = normalize_channel_link(channel_link)
+        entity = await client.get_entity(channel_link)
+        channel_username = entity.username if hasattr(entity, "username") else channel_link
+        mode = options.get("mode", "by_count")
+        message_limit = options.get("message_limit", 1000)
+        from_date = options.get("from_date")
+        word_limit = options.get("word_limit", 100_000)
+        messages_data = []
+        total_words = 0
+        stop_reason = None
+
+        async for message in client.iter_messages(entity, limit=message_limit):
+            try:
+                message_date = message.date
+                if mode == "by_date" and from_date and message_date:
+                    msg_date = message_date.date() if hasattr(message_date, "date") else message_date
+                    if msg_date < from_date:
+                        stop_reason = "date"
+                        break
+                text = message.text or ""
+                if mode == "by_words":
+                    total_words += len(text.split())
+                    if total_words >= word_limit:
+                        stop_reason = "words"
+                date_iso = message_date.isoformat() if message_date else None
+                date_unixtime = int(message_date.timestamp()) if message_date else None
+                messages_data.append({
+                    "id": message.id,
+                    "date": date_iso,
+                    "date_unixtime": date_unixtime,
+                    "text": text,
+                    "views": getattr(message, "views", None),
+                    "forwards": getattr(message, "forwards", None),
+                    "media_type": get_media_type(message),
+                    "reactions": parse_reactions(message),
+                    "reply_to_msg_id": getattr(message, "reply_to_msg_id", None),
+                    "url": build_message_url(channel_username, message.id),
+                })
+                if mode == "by_words" and stop_reason == "words":
+                    break
+            except FloodWaitError as e:
+                await asyncio.sleep(e.seconds)
+                continue
+            except Exception:
+                continue
+
+        return {
+            "channel": channel_link,
+            "channel_id": entity.id,
+            "channel_title": getattr(entity, "title", None),
+            "messages": messages_data,
+            "total_messages": len(messages_data),
+            "total_words": total_words if mode == "by_words" else None,
+            "stop_reason": stop_reason,
+        }
+    except FloodWaitError as e:
+        await asyncio.sleep(e.seconds)
+        return None
+    except Exception:
+        return None
+
+
+async def run_scraping(api_id, api_hash, session_string, links, options, progress_bar, log_callback):
+    all_results = []
+    client = None
+    try:
+        api_id = int(api_id.strip())
+        client = TelegramClient(
+            StringSession(session_string.strip()),
+            api_id,
+            api_hash.strip(),
+        )
+        await client.connect()
+        if not await client.is_user_authorized():
+            log_callback("❌ Сессия не авторизована.")
+            return None
+        for idx, link in enumerate(links):
+            log_callback(f"🔄 Обработка {idx + 1}/{len(links)}: {link}")
+            progress_bar.progress((idx) / len(links))
+            result = await scrape_channel(client, link, options)
+            if result:
+                all_results.append(result)
+                log_callback(f"✅ {result['total_messages']} сообщений: {link}")
+        progress_bar.progress(1.0)
+        log_callback(f"✅ Готово. Каналов: {len(all_results)}.")
+        return all_results
+    except ValueError:
+        log_callback("❌ API_ID должен быть числом.")
+        return None
+    except Exception as e:
+        log_callback(f"❌ Ошибка: {e}")
+        return None
+    finally:
+        if client:
+            await client.disconnect()
+
+
 # ——— Сайдбар: API-ключи и вход ———
 with st.sidebar:
     st.markdown(
@@ -485,159 +638,6 @@ with tab_results:
                 use_container_width=True,
                 key="dl_excel",
             )
-
-# ——— Вспомогательные функции (парсинг, скрапинг) ———
-def get_media_type(message):
-    if message.photo:
-        return "photo"
-    elif message.video:
-        return "video"
-    elif message.voice:
-        return "voice"
-    elif message.document:
-        return "document"
-    elif message.audio:
-        return "audio"
-    elif message.sticker:
-        return "sticker"
-    elif message.gif:
-        return "gif"
-    elif message.poll:
-        return "poll"
-    return "none"
-
-
-def parse_reactions(message):
-    reactions = []
-    if message.reactions and hasattr(message.reactions, "results") and message.reactions.results:
-        for reaction in message.reactions.results:
-            try:
-                if reaction.reaction:
-                    emoji = getattr(reaction.reaction, "emoticon", None) or str(reaction.reaction)
-                    count = getattr(reaction, "count", 0) or 0
-                    if emoji:
-                        reactions.append({"emoji": emoji, "count": count})
-            except Exception:
-                continue
-    return reactions
-
-
-def build_message_url(channel_username: str, message_id: int) -> str:
-    username = channel_username.lstrip("@")
-    return f"https://t.me/{username}/{message_id}"
-
-
-def normalize_channel_link(link: str) -> str:
-    link = link.strip()
-    if link.startswith("https://t.me/"):
-        link = link[len("https://t.me/"):]
-    elif link.startswith("http://t.me/"):
-        link = link[len("http://t.me/"):]
-    elif link.startswith("t.me/"):
-        link = link[len("t.me/"):]
-    if link.startswith("@"):
-        link = link[1:]
-    return link.strip()
-
-
-async def scrape_channel(client, channel_link, options):
-    try:
-        channel_link = normalize_channel_link(channel_link)
-        entity = await client.get_entity(channel_link)
-        channel_username = entity.username if hasattr(entity, "username") else channel_link
-        mode = options.get("mode", "by_count")
-        message_limit = options.get("message_limit", 1000)
-        from_date = options.get("from_date")
-        word_limit = options.get("word_limit", 100_000)
-        messages_data = []
-        total_words = 0
-        stop_reason = None
-
-        async for message in client.iter_messages(entity, limit=message_limit):
-            try:
-                message_date = message.date
-                if mode == "by_date" and from_date and message_date:
-                    msg_date = message_date.date() if hasattr(message_date, "date") else message_date
-                    if msg_date < from_date:
-                        stop_reason = "date"
-                        break
-                text = message.text or ""
-                if mode == "by_words":
-                    total_words += len(text.split())
-                    if total_words >= word_limit:
-                        stop_reason = "words"
-                date_iso = message_date.isoformat() if message_date else None
-                date_unixtime = int(message_date.timestamp()) if message_date else None
-                messages_data.append({
-                    "id": message.id,
-                    "date": date_iso,
-                    "date_unixtime": date_unixtime,
-                    "text": text,
-                    "views": getattr(message, "views", None),
-                    "forwards": getattr(message, "forwards", None),
-                    "media_type": get_media_type(message),
-                    "reactions": parse_reactions(message),
-                    "reply_to_msg_id": getattr(message, "reply_to_msg_id", None),
-                    "url": build_message_url(channel_username, message.id),
-                })
-                if mode == "by_words" and stop_reason == "words":
-                    break
-            except FloodWaitError as e:
-                await asyncio.sleep(e.seconds)
-                continue
-            except Exception:
-                continue
-
-        return {
-            "channel": channel_link,
-            "channel_id": entity.id,
-            "channel_title": getattr(entity, "title", None),
-            "messages": messages_data,
-            "total_messages": len(messages_data),
-            "total_words": total_words if mode == "by_words" else None,
-            "stop_reason": stop_reason,
-        }
-    except FloodWaitError as e:
-        await asyncio.sleep(e.seconds)
-        return None
-    except Exception:
-        return None
-
-
-async def run_scraping(api_id, api_hash, session_string, links, options, progress_bar, log_callback):
-    all_results = []
-    client = None
-    try:
-        api_id = int(api_id.strip())
-        client = TelegramClient(
-            StringSession(session_string.strip()),
-            api_id,
-            api_hash.strip(),
-        )
-        await client.connect()
-        if not await client.is_user_authorized():
-            log_callback("❌ Сессия не авторизована.")
-            return None
-        for idx, link in enumerate(links):
-            log_callback(f"🔄 Обработка {idx + 1}/{len(links)}: {link}")
-            progress_bar.progress((idx) / len(links))
-            result = await scrape_channel(client, link, options)
-            if result:
-                all_results.append(result)
-                log_callback(f"✅ {result['total_messages']} сообщений: {link}")
-        progress_bar.progress(1.0)
-        log_callback(f"✅ Готово. Каналов: {len(all_results)}.")
-        return all_results
-    except ValueError:
-        log_callback("❌ API_ID должен быть числом.")
-        return None
-    except Exception as e:
-        log_callback(f"❌ Ошибка: {e}")
-        return None
-    finally:
-        if client:
-            await client.disconnect()
-
 
 st.markdown("---")
 st.caption("**Telegram Cloud Scraper Pro** — Streamlit & Telethon")
